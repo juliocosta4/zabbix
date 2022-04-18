@@ -1,0 +1,82 @@
+#Docker-Compose criado por Julio Costa
+version: '3.1'
+
+volumes:
+  pgsqldata:
+  pgsqlconf:
+  pgsqllog:
+  zabbixdata:
+  grafanadata:
+
+networks:
+  network-zabbix:
+    driver: bridge
+
+services:
+  jcost-pgsql:
+    container_name: jcost-pgsql
+    image: postgres:latest
+    networks:
+      - network-zabbix
+    volumes:
+      - pgsqldata:/var/lib/postgresql/data
+      - pgsqlconf:/etc/postgresql
+      - pgsqllog:/var/log/postgresql
+    environment:
+      POSTGRES_USER: jcostusr
+      POSTGRES_PASSWORD: jcostpwd
+      POSTGRES_DB: jcost-zabbixdb
+
+  jcost-zabbix-server:
+    container_name: jcost-zabbix-server
+    image: zabbix/zabbix-server-pgsql:latest
+    networks:
+      - network-zabbix
+    links:
+      - jcost-pgsql
+    volumes:
+      - zabbixdata:/usr/lib/zabbix
+    environment:
+      DB_SERVER_HOST: jcost-pgsql
+      POSTGRES_USER: jcostusr
+      POSTGRES_PASSWORD: jcostpwd
+      POSTGRES_DB: jcost-zabbixdb
+    depends_on:
+      - jcost-pgsql
+
+  jcost-zabbix-web:
+    container_name: jcost-zabbix-web
+    image: zabbix/zabbix-web-nginx-pgsql:latest
+    networks:
+      - network-zabbix
+    links:
+      - jcost-pgsql
+      - jcost-zabbix-server
+    ports:
+      - '80:8080'
+      - '443:8443'
+    environment:
+      ZBX_SERVER_HOST: jcost-zabbix-server
+      DB_SERVER_HOST: jcost-pgsql
+      POSTGRES_USER: jcostusr
+      POSTGRES_PASSWORD: jcostpwd
+      POSTGRES_DB: json-zabbixdb
+    depends_on:
+      - jcost-pgsql
+      - jcost-zabbix-server
+    
+  jcost-grafana:
+    container_name: jcost-grafana
+    image: grafana/grafana
+    networks:
+      - network-zabbix
+    links:
+      - jcost-pgsql
+      - jcost-zabbix-server
+    ports:
+      - '3000:3000'
+    volumes:
+      - grafanadata:/var/lib/grafana
+    depends_on:
+      - jcost-pgsql
+      - jcost-zabbix-server
